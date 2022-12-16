@@ -2,21 +2,37 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 )
 
 func main() {
-	originServerHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Printf("[origin server] received request at: %s\n", time.Now())
-		_, _ = fmt.Print(r, "origin server response")
-	})
-	fmt.Print(originServerHandler)
+	originServerURL, err := url.Parse("http://127.0.0.1:8081")
+	if err != nil {
+		log.Fatal("invalid origin server URL")
+	}
 
 	reverseProxy := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("[reverse proxy server] received request at %s\n", time.Now())
+
+		r.Host = originServerURL.Host
+		r.URL.Host = originServerURL.Host
+		r.URL.Scheme = originServerURL.Scheme
+		r.RequestURI = ""
+
+		originServerResponse, err := http.DefaultClient.Do(r)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = fmt.Fprint(w, err)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		io.Copy(w, originServerResponse.Body)
 	})
 
 	httpPort := os.Getenv("HTTP_PORT")
@@ -28,4 +44,5 @@ func main() {
 	log.Printf("Starting server on http://localhost%s", port)
 
 	log.Fatal(http.ListenAndServe(port, reverseProxy))
+
 }
