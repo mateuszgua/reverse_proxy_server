@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -10,7 +11,7 @@ import (
 )
 
 func main() {
-	originServerURL, err := url.Parse("http://localhost:8081")
+	originServerURL, err := url.Parse("http://127.0.0.1:8081")
 	if err != nil {
 		log.Fatal("invalid origin server URL")
 	}
@@ -23,13 +24,15 @@ func main() {
 		r.URL.Scheme = originServerURL.Scheme
 		r.RequestURI = ""
 
-		_, err := http.DefaultClient.Do(r)
+		originServerResponse, err := http.DefaultClient.Do(r)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = fmt.Fprint(w, err)
 			return
 		}
 
+		w.WriteHeader(http.StatusOK)
+		io.Copy(w, originServerResponse.Body)
 	})
 
 	httpPort := os.Getenv("HTTP_PORT")
@@ -41,4 +44,5 @@ func main() {
 	log.Printf("Starting server on http://localhost%s", port)
 
 	log.Fatal(http.ListenAndServe(port, reverseProxy))
+
 }
